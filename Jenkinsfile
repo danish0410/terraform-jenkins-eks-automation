@@ -1,67 +1,54 @@
 pipeline {
   agent any
 
-  environment {
-    TF_WORK_DIR = 'infrastructure/'  // or your .tf folder
+  parameters {
+    choice(name: 'ENV', choices: ['dev', 'stage', 'prod'], description: 'Choose the environment to deploy')
   }
 
-  parameters {
-    string(name: 'ENV', defaultValue: 'dev', description: 'Deployment environment')
+  environment {
+    TF_VAR_env = "${params.ENV}"
+    TFVARS_FILE = "${params.ENV}.tfvars"
   }
 
   stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
 
     stage('Terraform Init') {
       steps {
-        dir("${TF_WORK_DIR}") {
-          script {
-            sh """
-              echo "Initializing Terraform for ${params.ENV}..."
-              terraform init -backend-config="key=${params.ENV}/terraform.tfstate"
-            """
-          }
-        }
+        sh 'terraform init -backend-config=03 backend.tf'
       }
     }
 
     stage('Terraform Validate') {
       steps {
-        dir("${TF_WORK_DIR}") {
-          sh 'terraform validate'
-        }
+        sh 'terraform validate'
       }
     }
 
     stage('Terraform Plan') {
       steps {
-        dir("${TF_WORK_DIR}") {
-          sh """
-            echo "Planning Terraform deployment for ${params.ENV}..."
-            terraform plan -var-file="${params.ENV}.tfvars" -out=tfplan
-          """
-        }
+        sh 'terraform plan -var-file=05 terraform.tfvars -var-file=06 dev.tfvars'
+      }
+    }
+
+    stage('Approval for Production') {
+      when {
+        expression { return params.ENV == 'prod' }
+      }
+      steps {
+        input message: "You are about to deploy to PRODUCTION. Are you sure you want to continue?"
       }
     }
 
     stage('Terraform Apply') {
-      when {
-        beforeAgent true
-        expression { return params.ENV == 'prod' || input message: "Apply Terraform to ${params.ENV}?", ok: 'Apply' }
-      }
       steps {
-        dir("${TF_WORK_DIR}") {
-          sh """
-            echo "Applying Terraform changes for ${params.ENV}..."
-            terraform apply -auto-approve tfplan
-          """
-        }
-      }
-    }
-
-    stage('Terraform Output') {
-      steps {
-        dir("${TF_WORK_DIR}") {
-          sh 'terraform output'
+        script {
+          def tfvars = "05 terraform.tfvars -var-file=06 ${params.ENV}.tfvars"
+          sh "terraform apply -auto-approve -var-file=${tfvars}"
         }
       }
     }
@@ -69,10 +56,10 @@ pipeline {
 
   post {
     failure {
-      echo "Terraform failed for ${params.ENV}"
+      echo 'Terraform deployment failed!'
     }
     success {
-      echo "Terraform successfully applied for ${params.ENV}"
+      echo 'Terraform deployment completed successfully!'
     }
   }
 }
