@@ -1,0 +1,68 @@
+pipeline {
+  agent any
+
+  parameters {
+    choice(name: 'ENV', choices: ['dev', 'stage', 'prod'], description: 'Select environment to destroy')
+  }
+
+  environment {
+    TF_WORK_DIR = "./terraform"                  // Path to your Terraform code
+    TF_VAR_FILE = "${params.ENV}.tfvars"         // tfvars based on environment
+    BACKEND_KEY = "${params.ENV}/terraform.tfstate"
+  }
+
+  stages {
+    stage('Checkout Code') {
+      steps {
+        git branch: 'main', url: 'https://github.com/your-org/your-repo.git'
+      }
+    }
+
+    stage('Terraform Init') {
+      steps {
+        dir("${TF_WORK_DIR}") {
+          sh """
+            terraform init \
+              -backend-config="bucket=tf-backup-aws" \
+              -backend-config="key=${BACKEND_KEY}" \
+              -backend-config="region=ap-south-1" \
+              -backend-config="dynamodb_table=tf-locks" \
+              -reconfigure
+          """
+        }
+      }
+    }
+
+    stage('Select Workspace') {
+      steps {
+        dir("${TF_WORK_DIR}") {
+          sh """
+            terraform workspace select ${params.ENV} || terraform workspace new ${params.ENV}
+          """
+        }
+      }
+    }
+
+    stage("Confirm Destroy") {
+      steps {
+        script {
+          input message: "Are you absolutely sure you want to DESTROY the '${params.ENV}' environment?", ok: 'Yes, Destroy'
+        }
+      }
+    }
+
+    stage('Terraform Destroy') {
+      steps {
+        dir("${TF_WORK_DIR}") {
+          sh "terraform destroy -var-file=${TF_VAR_FILE} -auto-approve"
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      echo "Destroy pipeline completed for: ${params.ENV}"
+    }
+  }
+}
