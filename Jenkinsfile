@@ -1,61 +1,60 @@
 pipeline {
-  agent any
+    agent any
 
-  parameters {
-    choice(name: 'ENV', choices: ['dev', 'stage', 'prod'], description: 'Choose environment')
-  }
-
-  environment {
-    TFVARS_FILE = "${params.ENV}.tfvars"
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        TF_ENV = 'dev' // Change to 'stage' or 'prod' as needed
+        TF_VAR_FILE = "${TF_ENV}.tfvars"
+        BACKEND_FILE = '03 backend.tf'
     }
 
-    stage('Terraform Init') {
-      steps {
-        bat 'terraform init'
-      }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                bat "terraform --version"
+                bat "terraform init -input=false"
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                bat "terraform validate"
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                bat "terraform plan -var-file=${TF_VAR_FILE} -input=false"
+            }
+        }
+
+        stage('Approval for Production') {
+            when {
+                expression { env.TF_ENV == 'prod' }
+            }
+            steps {
+                input message: "Approve deployment to PRODUCTION?"
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                bat "terraform apply -auto-approve -var-file=${TF_VAR_FILE} -input=false"
+            }
+        }
     }
 
-    stage('Terraform Validate') {
-      steps {
-        bat 'terraform validate'
-      }
+    post {
+        failure {
+            echo "Terraform deployment failed!"
+        }
+        success {
+            echo "Terraform deployment succeeded!"
+        }
     }
-
-    stage('Terraform Plan') {
-      steps {
-        bat "terraform plan -var-file=terraform.tfvars -var-file=${env.TFVARS_FILE}"
-      }
-    }
-
-    stage('Approval for Production') {
-      when {
-        expression { return params.ENV == 'prod' }
-      }
-      steps {
-        input message: "You are about to deploy to PRODUCTION. Continue?"
-      }
-    }
-
-    stage('Terraform Apply') {
-      steps {
-        bat "terraform apply -auto-approve -var-file=terraform.tfvars -var-file=${env.TFVARS_FILE}"
-      }
-    }
-  }
-
-  post {
-    failure {
-      echo 'Terraform deployment failed!'
-    }
-    success {
-      echo 'Terraform deployment completed successfully!'
-    }
-  }
 }
