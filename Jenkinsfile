@@ -16,8 +16,7 @@ pipeline {
 
         stage('Terraform Init') {
             steps {
-                bat "terraform --version"
-                bat "terraform init -input=false"
+                bat 'C:\\Tools\\Terraform\\terraform.exe init'
             }
         }
 
