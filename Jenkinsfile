@@ -2,11 +2,10 @@ pipeline {
   agent any
 
   parameters {
-    choice(name: 'ENV', choices: ['dev', 'stage', 'prod'], description: 'Choose the environment to deploy')
+    choice(name: 'ENV', choices: ['dev', 'stage', 'prod'], description: 'Choose environment')
   }
 
   environment {
-    TF_VAR_env = "${params.ENV}"
     TFVARS_FILE = "${params.ENV}.tfvars"
   }
 
@@ -19,19 +18,19 @@ pipeline {
 
     stage('Terraform Init') {
       steps {
-        sh 'terraform init -backend-config=03 backend.tf'
+        bat 'terraform init'
       }
     }
 
     stage('Terraform Validate') {
       steps {
-        sh 'terraform validate'
+        bat 'terraform validate'
       }
     }
 
     stage('Terraform Plan') {
       steps {
-        sh 'terraform plan -var-file=05 terraform.tfvars -var-file=06 dev.tfvars'
+        bat "terraform plan -var-file=terraform.tfvars -var-file=${env.TFVARS_FILE}"
       }
     }
 
@@ -40,16 +39,13 @@ pipeline {
         expression { return params.ENV == 'prod' }
       }
       steps {
-        input message: "You are about to deploy to PRODUCTION. Are you sure you want to continue?"
+        input message: "You are about to deploy to PRODUCTION. Continue?"
       }
     }
 
     stage('Terraform Apply') {
       steps {
-        script {
-          def tfvars = "05 terraform.tfvars -var-file=06 ${params.ENV}.tfvars"
-          sh "terraform apply -auto-approve -var-file=${tfvars}"
-        }
+        bat "terraform apply -auto-approve -var-file=terraform.tfvars -var-file=${env.TFVARS_FILE}"
       }
     }
   }
