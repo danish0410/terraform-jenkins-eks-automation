@@ -27,9 +27,9 @@ provider "aws" {
 #  url = "https://api.ipify.org"
 #}
 
-#locals {
-#  my_ip_cidr = "${chomp(data.http.my_ip.body)}/32"
-#}
+locals {
+  my_ip_cidr = var.my_ip_cidr
+}
 
 # ------------------------------------------
 # VPC
@@ -197,7 +197,7 @@ resource "aws_security_group" "bastion_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = [local.my_ip_cidr]
   }
 
   egress {
