@@ -23,13 +23,13 @@ provider "aws" {
 # ------------------------------------------
 # Automatically Get Your Public IP
 # ------------------------------------------
-data "http" "my_ip" {
-  url = "https://api.ipify.org"
-}
+#data "http" "my_ip" {
+#  url = "https://api.ipify.org"
+#}
 
-locals {
-  my_ip_cidr = "${chomp(data.http.my_ip.body)}/32"
-}
+#locals {
+#  my_ip_cidr = "${chomp(data.http.my_ip.body)}/32"
+#}
 
 # ------------------------------------------
 # VPC
