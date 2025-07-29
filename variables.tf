@@ -154,8 +154,7 @@ variable "s3_bucket_name" {
   type        = string
 }
 
-# ❌ Remove this block if you're dynamically injecting the IP from Jenkins
-# variable "my_ip_cidr" {
-#   description = "The CIDR block of the current user's IP address"
-#   type        = string
-# }
+variable "my_ip_cidr" {
+  description = "The CIDR block of the current user's IP address"
+  type        = string
+}
