@@ -153,8 +153,3 @@ variable "s3_bucket_name" {
   description = "The name of the S3 bucket used for remote backend and other storage"
   type        = string
 }
-
-variable "my_ip_cidr" {
-  description = "The CIDR block for allowing access from your IP"
-  type        = string
-}
