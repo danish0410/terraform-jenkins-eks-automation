@@ -21,6 +21,17 @@ provider "aws" {
 }
 
 # ------------------------------------------
+# Automatically Get Your Public IP
+# ------------------------------------------
+data "http" "my_ip" {
+  url = "https://api.ipify.org"
+}
+
+locals {
+  my_ip_cidr = "${chomp(data.http.my_ip.body)}/32"
+}
+
+# ------------------------------------------
 # VPC
 # ------------------------------------------
 resource "aws_vpc" "main" {
@@ -185,7 +196,7 @@ resource "aws_security_group" "bastion_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [local.my_ip_cidr]
   }
 
   egress {
@@ -290,7 +301,7 @@ resource "aws_iam_role_policy_attachment" "eks_worker_node_AmazonEKS_CNI_Policy"
 resource "aws_eks_cluster" "this" {
   name     = "${var.env}-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
-  version  = "1.29" # You can change this as needed
+  version  = "1.29"
 
   vpc_config {
     subnet_ids = [
