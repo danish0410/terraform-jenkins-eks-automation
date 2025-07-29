@@ -1,6 +1,7 @@
 variable "region" {
   description = "AWS Region"
   type        = string
+  default     = "ap-south-1"
 }
 
 variable "vpc_cidr" {
@@ -146,4 +147,9 @@ variable "vpc_route_cidr" {
 variable "log_bucket_prefix" {
   type        = string
   description = "S3 bucket log prefix"
+}
+
+variable "s3_bucket_name" {
+  description = "The name of the S3 bucket used for remote backend and other storage"
+  type        = string
 }
