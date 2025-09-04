@@ -1,4 +1,8 @@
 # Prerequisites
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
 *.d
 
 # Compiled Object files
