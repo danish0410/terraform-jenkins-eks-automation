@@ -396,45 +396,85 @@ resource "aws_vpc_endpoint" "dynamodb" {
   }
 }
 
+# ------------------------------------------
+# ebs_csi_driver, cert_manager, cluster_autoscaler latest compatible addon versions
+# ------------------------------------------
+
 resource "helm_release" "ebs_csi_driver" {
   name       = "aws-ebs-csi-driver"
   repository = "https://kubernetes-sigs.github.io/aws-ebs-csi-driver"
   chart      = "aws-ebs-csi-driver"
-  # version    = var.ebs_csi_version
-  namespace = "kube-system"
+  namespace  = "kube-system"
+  version    = "2.36.0" # stable version
 
-  depends_on = [aws_eks_node_group.private_nodes]
+  set = [
+    {
+      name  = "controller.serviceAccount.create"
+      value = "false"
+    },
+    {
+      name  = "controller.serviceAccount.name"
+      value = "ebs-csi-controller-sa"
+    }
+  ]
+
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_eks_node_group.private_nodes
+  ]
 }
 
 resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  # version          = var.cert_manager_version
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
   namespace        = "cert-manager"
   create_namespace = true
+  version          = "v1.15.0"
 
-  set = [{
-    name  = "installCRDs"
-    value = "true"
-  }]
+  set = [
+    {
+      name  = "installCRDs"
+      value = "true"
+    }
+  ]
 
-  depends_on = [aws_eks_node_group.private_nodes]
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_eks_node_group.private_nodes
+  ]
 }
 
 resource "helm_release" "cluster_autoscaler" {
   name       = "cluster-autoscaler"
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
-  # version    = var.cluster_autoscaler_version
-  namespace = "kube-system"
+  namespace  = "kube-system"
+  version    = "9.36.0"
 
-  set = [{
-    name  = "autoDiscovery.clusterName"
-    value = aws_eks_cluster.this.name
-  }]
+  set = [
+    {
+      name  = "autoDiscovery.clusterName"
+      value = aws_eks_cluster.this.name
+    },
+    {
+      name  = "awsRegion"
+      value = var.region
+    },
+    {
+      name  = "rbac.serviceAccount.create"
+      value = "false"
+    },
+    {
+      name  = "rbac.serviceAccount.name"
+      value = "cluster-autoscaler"
+    }
+  ]
 
-  depends_on = [aws_eks_node_group.private_nodes]
+  depends_on = [
+    aws_eks_cluster.this,
+    aws_eks_node_group.private_nodes
+  ]
 }
 
 # ------------------------------------------
