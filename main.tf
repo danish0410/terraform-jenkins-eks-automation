@@ -3,21 +3,35 @@
 # ------------------------------------------
 
 terraform {
+  required_version = ">= 1.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = ">= 5.0"
     }
     random = {
       source  = "hashicorp/random"
       version = ">= 3.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.23"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = ">= 2.12"
+    }
   }
-  required_version = ">= 1.0"
 }
 
-provider "aws" {
-  region = var.region
+# EKS cluster authentication
+data "aws_eks_cluster" "auth" {
+  name = aws_eks_cluster.this.name
+}
+
+data "aws_eks_cluster_auth" "auth" {
+  name = aws_eks_cluster.this.name
 }
 
 # ------------------------------------------
@@ -423,7 +437,125 @@ resource "helm_release" "cluster_autoscaler" {
   depends_on = [aws_eks_node_group.private_nodes]
 }
 
+# ------------------------------------------
+# Get latest compatible addon versions
+# ------------------------------------------
+data "aws_eks_addon_version" "vpc_cni" {
+  addon_name         = "vpc-cni"
+  kubernetes_version = aws_eks_cluster.this.version
+  most_recent        = true
+}
+
+data "aws_eks_addon_version" "coredns" {
+  addon_name         = "coredns"
+  kubernetes_version = aws_eks_cluster.this.version
+  most_recent        = true
+}
+
+data "aws_eks_addon_version" "kube_proxy" {
+  addon_name         = "kube-proxy"
+  kubernetes_version = aws_eks_cluster.this.version
+  most_recent        = true
+}
+
+# ------------------------------------------
+# EKS Managed Addons
+# ------------------------------------------
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "vpc-cni"
+  addon_version               = data.aws_eks_addon_version.vpc_cni.version
+  resolve_conflicts_on_update = "OVERWRITE" # or "NONE" if you prefer
+  service_account_role_arn    = null        # managed addon uses node role + CNI policy you already attached
+  depends_on                  = [aws_eks_cluster.this]
+}
+
+resource "aws_eks_addon" "coredns" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "coredns"
+  addon_version               = data.aws_eks_addon_version.coredns.version
+  resolve_conflicts_on_update = "OVERWRITE"
+  depends_on                  = [aws_eks_cluster.this]
+}
+
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "kube-proxy"
+  addon_version               = data.aws_eks_addon_version.kube_proxy.version
+  resolve_conflicts_on_update = "OVERWRITE"
+  depends_on                  = [aws_eks_cluster.this]
+}
+
+# ------------------------------------------
+# Ensure kubeconfig is set for kubectl
+# Requires AWS CLI + kubectl installed on the machine running Terraform
+# ------------------------------------------
+resource "null_resource" "kubeconfig" {
+  # Recreate if cluster name or region changes
+  triggers = {
+    cluster = aws_eks_cluster.this.name
+    region  = var.region
+  }
+
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${var.region}"
+  }
+
+  depends_on = [aws_eks_cluster.this]
+}
+
+# VPC CNI
 resource "null_resource" "validate_vpc_cni" {
+  depends_on = [
+    null_resource.kubeconfig,
+    aws_eks_addon.vpc_cni
+  ]
+
+  triggers = {
+    addon_name    = aws_eks_addon.vpc_cni.addon_name
+    addon_version = aws_eks_addon.vpc_cni.addon_version
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl rollout status daemonset/aws-node -n kube-system --timeout=300s"
+  }
+}
+
+# CoreDNS
+resource "null_resource" "validate_coredns" {
+  depends_on = [
+    null_resource.kubeconfig,
+    aws_eks_addon.coredns
+  ]
+
+  triggers = {
+    addon_name    = aws_eks_addon.coredns.addon_name
+    addon_version = aws_eks_addon.coredns.addon_version
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl rollout status deployment/coredns -n kube-system --timeout=300s"
+  }
+}
+
+# Kube-proxy
+resource "null_resource" "validate_kube_proxy" {
+  depends_on = [
+    null_resource.kubeconfig,
+    aws_eks_addon.kube_proxy
+  ]
+
+  triggers = {
+    addon_name    = aws_eks_addon.kube_proxy.addon_name
+    addon_version = aws_eks_addon.kube_proxy.addon_version
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl rollout status daemonset/kube-proxy -n kube-system --timeout=300s"
+  }
+}
+
+/*resource "null_resource" "validate_vpc_cni" {
   depends_on = [aws_eks_addon.vpc_cni]
 
   triggers = {
@@ -512,4 +644,4 @@ resource "null_resource" "validate_cluster_autoscaler" {
   provisioner "local-exec" {
     command = "kubectl rollout status deployment/cluster-autoscaler -n kube-system --timeout=300s"
   }
-}
+}*/
