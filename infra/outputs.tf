@@ -1,19 +1,19 @@
-output "private_subnet_id" {
-  value = module.vpc.private_subnets
+output "region" {
+  value = var.region
 }
 
-output "public_subnets_output" {
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
+output "public_subnets" {
   value = module.vpc.public_subnets
 }
 
-output "IGW_id" {
-  value = module.vpc.igw_id
+output "private_subnets" {
+  value = module.vpc.private_subnets
 }
 
-output "bastion_ip" {
-  value = aws_instance.bastion.public_ip
-}
-
-output "available_azs" {
-  value = data.aws_availability_zones.available.names
+output "bastion_sg_id" {
+  value = aws_security_group.ansible_bastion_sg.id
 }

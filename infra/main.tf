@@ -84,17 +84,20 @@ resource "aws_security_group" "ansible_bastion_sg" {
 }
 
 # ---------------------------------------------------------------------
-# Bastion Host
+# Bastion Launch Template
 # ---------------------------------------------------------------------
-resource "aws_instance" "bastion" {
-  ami                         = var.ami
-  instance_type               = var.instance_type
-  subnet_id                   = module.vpc.public_subnets[0]
-  key_name                    = aws_key_pair.terraform_key.key_name
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.ansible_bastion_sg.id]
+resource "aws_launch_template" "bastion_lt" {
+  name_prefix   = "bastion-lt-"
+  image_id      = var.ami
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.terraform_key.key_name
 
-  user_data = <<-EOF
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.ansible_bastion_sg.id]
+  }
+
+  user_data = base64encode(<<-EOF
               #!/bin/bash
               apt-get update -y
               apt-get install -y software-properties-common git vim
@@ -103,9 +106,37 @@ resource "aws_instance" "bastion" {
               echo "Ansible installed successfully" >> /var/log/ansible-install.log
               git clone https://github.com/thani2808/first-bastion.git /opt/ansible-playbooks
               EOF
+  )
 
-  tags = {
-    Name = "Bastion"
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "Bastion-ASG"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------
+# Bastion Auto Scaling Group
+# ---------------------------------------------------------------------
+resource "aws_autoscaling_group" "bastion_asg" {
+  name                = "bastion-asg"
+  desired_capacity    = 2
+  max_size            = 2
+  min_size            = 2
+  vpc_zone_identifier = module.vpc.public_subnets
+  health_check_type   = "EC2"
+  force_delete        = true
+
+  launch_template {
+    id      = aws_launch_template.bastion_lt.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "Bastion-ASG"
+    propagate_at_launch = true
   }
 }
 
@@ -151,16 +182,5 @@ resource "aws_instance" "dev_ec2_private" {
     Name = "EC2-${count.index}"
   }
 
-  depends_on = [aws_instance.bastion]
-
-  connection {
-    type                = "ssh"
-    host                = self.private_ip
-    user                = "ubuntu"
-    private_key         = file(var.private_key_path)
-    bastion_host        = aws_instance.bastion.public_ip
-    bastion_user        = "ubuntu"
-    bastion_private_key = file(var.private_key_path)
-    timeout             = "12m"
-  }
+  depends_on = [aws_autoscaling_group.bastion_asg]
 }
