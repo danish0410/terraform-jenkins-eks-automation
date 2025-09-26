@@ -50,8 +50,8 @@ module "vpc" {
 # Terraform-managed Key Pair
 # ---------------------------------------------------------------------
 resource "aws_key_pair" "terraform_key" {
-  key_name   = "terraform-key"
-  public_key = file("/home/thani/.ssh/id_rsa.pub")
+  key_name   = var.key_name
+  public_key = file(var.public_key_path)
 }
 
 # ---------------------------------------------------------------------
@@ -90,7 +90,7 @@ resource "aws_instance" "bastion" {
   ami                         = var.ami
   instance_type               = var.instance_type
   subnet_id                   = module.vpc.public_subnets[0]
-  key_name                    = var.key_name
+  key_name                    = aws_key_pair.terraform_key.key_name
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ansible_bastion_sg.id]
 
@@ -144,7 +144,7 @@ resource "aws_instance" "dev_ec2_private" {
   ami                    = var.ami
   instance_type          = var.instance_type
   subnet_id              = module.vpc.private_subnets[count.index]
-  key_name               = var.key_name
+  key_name               = aws_key_pair.terraform_key.key_name
   vpc_security_group_ids = [aws_security_group.private_ec2.id]
 
   tags = {
@@ -157,10 +157,10 @@ resource "aws_instance" "dev_ec2_private" {
     type                = "ssh"
     host                = self.private_ip
     user                = "ubuntu"
-    private_key         = file("/home/thani/.ssh/id_rsa")
+    private_key         = file(var.private_key_path)
     bastion_host        = aws_instance.bastion.public_ip
     bastion_user        = "ubuntu"
-    bastion_private_key = file("/home/thani/.ssh/id_rsa")
+    bastion_private_key = file(var.private_key_path)
     timeout             = "12m"
   }
 }
