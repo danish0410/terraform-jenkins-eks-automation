@@ -1,9 +1,9 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.5.0"
 
   backend "s3" {
     bucket         = "tfstatebackup-25092025"
-    key            = "dev/terraform.tfstate"
+    key            = "global/terraform.tfstate"
     region         = "ap-south-1"
     dynamodb_table = "terraform-locks"
     encrypt        = true

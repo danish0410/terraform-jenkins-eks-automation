@@ -14,7 +14,7 @@ variable "vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of availability zones"
+  description = "List of availability zones (e.g. ap-south-1a, ap-south-1b)"
   type        = list(string)
 }
 
@@ -38,37 +38,20 @@ variable "private_subnet_names" {
   type        = list(string)
 }
 
-variable "ami" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-}
-
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-}
-
-variable "key_name" {
-  description = "Name for the key pair"
-  type        = string
-}
-
-variable "public_key_path" {
-  description = "Path to the public key file"
-  type        = string
-}
-
-variable "private_key_path" {
-  description = "Path to the private key file"
-  type        = string
+  default     = "t3.micro"
 }
 
 variable "cidr_blocks_ingress_bastion" {
   description = "Allowed CIDR blocks for Bastion ingress"
   type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "cidr_blocks_egress" {
   description = "Allowed CIDR blocks for egress"
   type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
