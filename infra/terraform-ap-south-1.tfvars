@@ -12,5 +12,5 @@ private_subnet_names = ["private-subnet-1"]
 
 instance_type = "t3.micro"
 
-cidr_blocks_ingress_bastion = ["49.204.140.119/32"]
+cidr_blocks_ingress_bastion = ["49.204.143.191/32"]
 cidr_blocks_egress          = ["0.0.0.0/0"]
