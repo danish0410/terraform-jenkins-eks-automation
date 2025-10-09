@@ -1,3 +1,71 @@
+aws s3api create-bucket \
+  --bucket tfstatebackup-09102025-south \
+  --region ap-south-1 \
+  --create-bucket-configuration LocationConstraint=ap-south-1
+
+aws dynamodb create-table \
+  --table-name terraformsouth-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+  --region ap-south-1
+
+chmod +x scripts/generate_ed25519_key.sh
+./scripts/generate_ed25519_key.sh dev-servme-ap-south-1 ap-south-1
+
+terraform init -backend-config="backend-ap-south-1.tf"
+terraform fmt -recursive
+terraform validate
+terraform plan -var-file="terraform-ap-south-1.tfvars"
+terraform apply -var-file="terraform-ap-south-1.tfvars"
+
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=dev_servme-instance-*" \
+  --query 'Reservations[].Instances[].[InstanceId,PublicIpAddress,State.Name,Placement.AvailabilityZone]' \
+  --output table \
+  --region ap-south-1
+
+ssh -i ./dev_servme-ap-south-1.pem ubuntu@<PUBLIC_IP>
+terraform destroy -var-file="terraform-ap-south-1.tfvars"
+****************************************************************************************************************
+
+aws s3api create-bucket \
+  --bucket tfstatebackup-09102025-southeast \
+  --region ap-southeast-1 \
+  --create-bucket-configuration LocationConstraint=ap-southeast-1
+
+aws dynamodb create-table \
+  --table-name terraformsoutheast-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+  --region ap-southeast-1
+
+chmod +x scripts/generate_ed25519_key.sh
+./scripts/generate_ed25519_key.sh dev-servme-ap-southeast-1 ap-southeast-1
+
+  
+terraform init -backend-config="backend-ap-southeast-1.tf"
+terraform fmt -recursive
+terraform validate
+terraform plan -var-file="terraform-ap-southeast-1.tfvars"
+terraform apply -var-file="terraform-ap-southeast-1.tfvars"
+
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=dev_servme-instance-*" \
+  --query 'Reservations[].Instances[].[InstanceId,PublicIpAddress,State.Name,Placement.AvailabilityZone]' \
+  --output table \
+  --region ap-southeast-1
+
+ssh -i ./dev_servme-ap-southeast-1.pem ubuntu@<PUBLIC_IP>
+terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
+*******************************************************************
+
+
+permanently delete
+
+
+
 03-09-25 
 10:00am - 12:00pm identified the problem why github is not push the code, then only created github_new folder and clone the repo 
 12:00pm - 14:00pm updated the code with ebs_csi_driver, cert_manager, cluster_autoscaler etc - run the terraform init, terraform validate, terraform plan and terraform apply the got the error cluster name is not matched so updated the correct cluster name and re-run the terraform apply couple to times

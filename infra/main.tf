@@ -5,19 +5,19 @@ provider "aws" {
 # -------------------------
 # TLS key generation (ed25519)
 # -------------------------
-resource "tls_private_key" "bastion_key" {
+resource "tls_private_key" "dev_servme_key" {
   algorithm = "ED25519"
 }
 
 resource "aws_key_pair" "terraform_key" {
-  key_name   = "${var.region}-bastion-key"
-  public_key = tls_private_key.bastion_key.public_key_openssh
+  key_name   = "${var.region}-dev-servme-key"
+  public_key = tls_private_key.dev_servme_key.public_key_openssh
 }
 
 # Persist private key locally (secure it after apply)
 resource "local_file" "private_key" {
-  content         = tls_private_key.bastion_key.private_key_pem
-  filename        = "${path.module}/bastion-${var.region}.pem"
+  content         = tls_private_key.dev_servme_key.private_key_pem
+  filename        = "${path.module}/dev_servme-${var.region}.pem"
   file_permission = "0400"
 }
 
@@ -75,12 +75,12 @@ module "vpc" {
 }
 
 # -------------------------
-# Bastion SG
+# dev_servme (former bastion) SG - public
 # -------------------------
-resource "aws_security_group" "ansible_bastion_sg" {
+resource "aws_security_group" "dev_servme_sg" {
   vpc_id      = module.vpc.vpc_id
-  name        = "bastion-sg-${var.region}"
-  description = "Allow SSH access to bastion"
+  name        = "dev_servme-sg-${var.region}"
+  description = "Allow SSH access to dev_servme (public)"
 
   ingress {
     from_port   = 22
@@ -99,12 +99,12 @@ resource "aws_security_group" "ansible_bastion_sg" {
   }
 
   tags = {
-    Name = "bastion-sg-${var.region}"
+    Name = "dev_servme-sg-${var.region}"
   }
 }
 
 # -------------------------
-# Private EC2 SG (only allow SSH from bastion SG)
+# Private EC2 SG (only allow SSH from dev_servme SG)
 # -------------------------
 resource "aws_security_group" "private_ec2" {
   vpc_id = module.vpc.vpc_id
@@ -114,8 +114,8 @@ resource "aws_security_group" "private_ec2" {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.ansible_bastion_sg.id]
-    description     = "Allow SSH from Bastion"
+    security_groups = [aws_security_group.dev_servme_sg.id]
+    description     = "Allow SSH from dev_servme"
   }
 
   egress {
@@ -132,83 +132,116 @@ resource "aws_security_group" "private_ec2" {
 }
 
 # -------------------------
-# Launch Template for Bastion
+# Launch Template for dev_servme (public instances)
+# user_data is loaded from file: dev_servme_userdata.sh
 # -------------------------
-resource "aws_launch_template" "bastion_lt" {
-  name_prefix   = "bastion-lt-${var.region}-"
+resource "aws_launch_template" "dev_servme_lt" {
+  name_prefix   = "dev-servme-lt-${var.region}-"
   image_id      = data.aws_ami.ubuntu_latest.id
   instance_type = var.instance_type
   key_name      = aws_key_pair.terraform_key.key_name
 
   network_interfaces {
     associate_public_ip_address = true
-    security_groups             = [aws_security_group.ansible_bastion_sg.id]
+    security_groups             = [aws_security_group.dev_servme_sg.id]
   }
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              apt-get update -y
-              apt-get install -y software-properties-common git vim
-              add-apt-repository --yes --update ppa:ansible/ansible
-              apt-get update -y
-              apt install -y ansible >> /var/log/ansible-install.log 2>&1
-              echo "Ansible installed successfully" >> /var/log/ansible-install.log
-              git clone https://github.com/thani2808/first-bastion.git /opt/ansible-playbooks || true
-              EOF
-  )
+  user_data = base64encode(file("${path.module}/dev_servme_userdata.sh"))
 
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "Bastion-ASG-${var.region}"
+      Name = "dev_servme-instance-${var.region}"
     }
   }
 }
 
 # -------------------------
-# AutoScaling Group (Bastion)
+# Launch Template for private EC2 instances (no public IP)
+# uses same AMI and key, but different SG & no public IP
 # -------------------------
-resource "aws_autoscaling_group" "bastion_asg" {
-  name             = "bastion-asg-${var.region}"
-  desired_capacity = 2
-  max_size         = 2
-  min_size         = 2
+resource "aws_launch_template" "private_lt" {
+  name_prefix   = "private-ec2-lt-${var.region}-"
+  image_id      = data.aws_ami.ubuntu_latest.id
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.terraform_key.key_name
 
-  vpc_zone_identifier = module.vpc.public_subnets
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.private_ec2.id]
+  }
+
+  # keep a simple userdata or reuse same script if wanted
+  user_data = base64encode(file("${path.module}/dev_servme_userdata.sh"))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "private-ec2-instance-${var.region}"
+    }
+  }
+}
+
+# -------------------------
+# AutoScaling Group(s) for dev_servme (one ASG per public subnet)
+# Each ASG will run exactly 1 instance in that subnet (AZ)
+# -------------------------
+resource "aws_autoscaling_group" "dev_servme_asg" {
+  count            = length(module.vpc.public_subnets)
+  name             = "dev-servme-asg-${var.region}-${count.index}"
+  desired_capacity = 1
+  max_size         = 1
+  min_size         = 1
+
+  vpc_zone_identifier = [module.vpc.public_subnets[count.index]]
   health_check_type   = "EC2"
   force_delete        = true
 
   launch_template {
-    id      = aws_launch_template.bastion_lt.id
+    id      = aws_launch_template.dev_servme_lt.id
     version = "$Latest"
   }
 
   tag {
     key                 = "Name"
-    value               = "Bastion-ASG-${var.region}"
+    value               = "dev-servme-asg-${var.region}"
     propagate_at_launch = true
   }
 
   depends_on = [
-    aws_launch_template.bastion_lt,
+    aws_launch_template.dev_servme_lt,
     aws_key_pair.terraform_key
   ]
 }
 
 # -------------------------
-# Private EC2 Instances (one per private subnet)
+# AutoScaling Group(s) for private EC2 (one ASG per private subnet)
+# Each private ASG runs exactly 1 instance (for private hosts)
 # -------------------------
-resource "aws_instance" "dev_ec2_private" {
-  count                  = length(module.vpc.private_subnets)
-  ami                    = data.aws_ami.ubuntu_latest.id
-  instance_type          = var.instance_type
-  subnet_id              = module.vpc.private_subnets[count.index]
-  key_name               = aws_key_pair.terraform_key.key_name
-  vpc_security_group_ids = [aws_security_group.private_ec2.id]
+resource "aws_autoscaling_group" "private_asg" {
+  count            = length(module.vpc.private_subnets)
+  name             = "private-asg-${var.region}-${count.index}"
+  desired_capacity = 1
+  max_size         = 1
+  min_size         = 1
 
-  tags = {
-    Name = "EC2-${var.region}-${count.index}"
+  vpc_zone_identifier = [module.vpc.private_subnets[count.index]]
+  health_check_type   = "EC2"
+  force_delete        = true
+
+  launch_template {
+    id      = aws_launch_template.private_lt.id
+    version = "$Latest"
   }
 
-  depends_on = [aws_autoscaling_group.bastion_asg]
+  tag {
+    key                 = "Name"
+    value               = "private-asg-${var.region}"
+    propagate_at_launch = true
+  }
+
+  depends_on = [
+    aws_launch_template.private_lt,
+    aws_key_pair.terraform_key
+  ]
 }
