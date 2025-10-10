@@ -13,7 +13,8 @@ aws dynamodb create-table \
 chmod +x scripts/generate_ed25519_key.sh
 ./scripts/generate_ed25519_key.sh dev-classic-ap-south-1 ap-south-1
 
-mv backend-ap-southeast-1.tf backend-ap-southeast-1.tf.disabled
+mv backend-ap-southeast-1.hcl backend-ap-southeast-1.hcl.disabled
+mv backend-ap-south-1.hcl.disabled backend-ap-south-1.hcl
 terraform init -reconfigure -backend-config="backend-ap-south-1.hcl"
 terraform fmt -recursive
 terraform validate
@@ -32,7 +33,7 @@ aws ec2 describe-instances \
 ssh -i ./dev_classic-ap-south-1.pem ubuntu@<PUBLIC_IP>
 terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ****************************************************************************************************************
-
+****************************************************************************************************************
 aws s3api create-bucket \
   --bucket tfstatebackup-10102025-southeast \
   --region ap-southeast-1 \
