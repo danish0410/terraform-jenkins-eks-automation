@@ -42,7 +42,7 @@ fi
 
 # --- Paths ---
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PRIVATE_KEY_PATH="${PROJECT_DIR}/${KEY_NAME}.pem"
+PRIVATE_KEY_PATH="${PROJECT_DIR}/${KEY_NAME}"
 PUBLIC_KEY_PATH="${PROJECT_DIR}/${KEY_NAME}.pub"
 
 # --- Handle Existing Keys ---
