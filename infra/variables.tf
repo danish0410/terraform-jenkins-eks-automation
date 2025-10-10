@@ -1,3 +1,29 @@
+# --- Module and Provider Versions ---
+#variable "aws_provider_version" {
+#  description = "Version of AWS provider"
+#  type        = string
+#  default     = "~> 5.0"
+#}
+
+#variable "tls_provider_version" {
+#  description = "Version of TLS provider"
+#  type        = string
+#  default     = "~> 4.0"
+#}
+
+#variable "local_provider_version" {
+#  description = "Version of Local provider"
+#  type        = string
+#  default     = "~> 2.5"
+#}
+
+#variable "vpc_module_version" {
+#  description = "Version of terraform-aws-modules/vpc/aws"
+#  type        = string
+#  default     = "5.19.0"
+#}
+
+# --- Environment Settings ---
 variable "region" {
   description = "AWS region"
   type        = string
@@ -14,7 +40,7 @@ variable "vpc_cidr" {
 }
 
 variable "azs" {
-  description = "List of availability zones (e.g. ap-south-1a, ap-south-1b)"
+  description = "List of availability zones"
   type        = list(string)
 }
 
@@ -45,7 +71,7 @@ variable "instance_type" {
 }
 
 variable "cidr_blocks_ingress_bastion" {
-  description = "Allowed CIDR blocks for Bastion ingress"
+  description = "Allowed CIDR blocks for bastion ingress"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }

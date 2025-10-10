@@ -5,7 +5,7 @@
 # Usage:
 #   ./scripts/generate_ed25519_key.sh <key_name> [region]
 # Example:
-#   ./scripts/generate_ed25519_key.sh dev-servme-ap-southeast-1 ap-southeast-1
+#   ./scripts/generate_ed25519_key.sh dev-classic-ap-southeast-1 ap-southeast-1
 # =====================================================================
 
 set -e
@@ -26,7 +26,7 @@ if [ -z "$AWS_REGION" ]; then
 fi
 if [ -z "$AWS_REGION" ]; then
   echo "❌ AWS region not set. Please pass it as an argument or configure AWS CLI."
-  echo "Example: ./generate_ed25519_key.sh dev-servme-ap-southeast-1 ap-southeast-1"
+  echo "Example: ./generate_ed25519_key.sh dev-classic-ap-southeast-1 ap-southeast-1"
   exit 1
 fi
 

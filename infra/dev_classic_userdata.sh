@@ -1,9 +1,9 @@
 #!/bin/bash
-# dev_servme userdata script
-# This script will be used as user-data for both public dev_servme and private EC2 (adjust as needed)
+# dev_classicuserdata script
+# This script will be used as user-data for both public dev_classicand private EC2 (adjust as needed)
 
 set -e
-exec > /var/log/dev_servme-userdata.log 2>&1
+exec > /var/log/dev_classic-userdata.log 2>&1
 
 echo "Starting userdata at $(date)"
 
@@ -24,4 +24,4 @@ else
 fi
 
 # Any other bootstrap steps
-echo "dev_servme userdata completed at $(date)"
+echo "dev_classicuserdata completed at $(date)"

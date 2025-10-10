@@ -1,5 +1,5 @@
 aws s3api create-bucket \
-  --bucket tfstatebackup-09102025-south \
+  --bucket tfstatebackup-10102025-south \
   --region ap-south-1 \
   --create-bucket-configuration LocationConstraint=ap-south-1
 
@@ -11,26 +11,30 @@ aws dynamodb create-table \
   --region ap-south-1
 
 chmod +x scripts/generate_ed25519_key.sh
-./scripts/generate_ed25519_key.sh dev-servme-ap-south-1 ap-south-1
+./scripts/generate_ed25519_key.sh dev-classic-ap-south-1 ap-south-1
 
-terraform init -backend-config="backend-ap-south-1.tf"
+mv backend-ap-southeast-1.tf backend-ap-southeast-1.tf.disabled
+terraform init -reconfigure -backend-config="backend-ap-south-1.hcl"
 terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-south-1.tfvars"
 terraform apply -var-file="terraform-ap-south-1.tfvars"
+terraform destroy -var-file="terraform-ap-south-1.tfvars"
+###rm -rf .terraform/ terraform.tfstate terraform.tfstate.backup
+
 
 aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=dev_servme-instance-*" \
+  --filters "Name=tag:Name,Values=dev_classic-instance-*" \
   --query 'Reservations[].Instances[].[InstanceId,PublicIpAddress,State.Name,Placement.AvailabilityZone]' \
   --output table \
   --region ap-south-1
 
-ssh -i ./dev_servme-ap-south-1.pem ubuntu@<PUBLIC_IP>
+ssh -i ./dev_classic-ap-south-1.pem ubuntu@<PUBLIC_IP>
 terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ****************************************************************************************************************
 
 aws s3api create-bucket \
-  --bucket tfstatebackup-09102025-southeast \
+  --bucket tfstatebackup-10102025-southeast \
   --region ap-southeast-1 \
   --create-bucket-configuration LocationConstraint=ap-southeast-1
 
@@ -42,29 +46,28 @@ aws dynamodb create-table \
   --region ap-southeast-1
 
 chmod +x scripts/generate_ed25519_key.sh
-./scripts/generate_ed25519_key.sh dev-servme-ap-southeast-1 ap-southeast-1
+./scripts/generate_ed25519_key.sh dev-classic-ap-southeast-1 ap-southeast-1
 
-  
-terraform init -backend-config="backend-ap-southeast-1.tf"
+mv backend-ap-south-1.hcl backend-ap-south-1.hcl.disabled
+mv backend-ap-southeast-1.hcl.disabled backend-ap-southeast-1.hcl
+terraform init -reconfigure -backend-config="backend-ap-southeast-1.hcl"
 terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-southeast-1.tfvars"
 terraform apply -var-file="terraform-ap-southeast-1.tfvars"
+terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
 
 aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=dev_servme-instance-*" \
+  --filters "Name=tag:Name,Values=dev_classic-instance-*" \
   --query 'Reservations[].Instances[].[InstanceId,PublicIpAddress,State.Name,Placement.AvailabilityZone]' \
   --output table \
   --region ap-southeast-1
 
-ssh -i ./dev_servme-ap-southeast-1.pem ubuntu@<PUBLIC_IP>
+ssh -i ./dev_classic-ap-southeast-1.pem ubuntu@<PUBLIC_IP>
 terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
-*******************************************************************
-
 
 permanently delete
-
-
+********************************************
 
 03-09-25 
 10:00am - 12:00pm identified the problem why github is not push the code, then only created github_new folder and clone the repo 
