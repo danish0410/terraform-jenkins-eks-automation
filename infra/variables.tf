@@ -1,28 +1,3 @@
-# --- Module and Provider Versions ---
-#variable "aws_provider_version" {
-#  description = "Version of AWS provider"
-#  type        = string
-#  default     = "~> 5.0"
-#}
-
-#variable "tls_provider_version" {
-#  description = "Version of TLS provider"
-#  type        = string
-#  default     = "~> 4.0"
-#}
-
-#variable "local_provider_version" {
-#  description = "Version of Local provider"
-#  type        = string
-#  default     = "~> 2.5"
-#}
-
-#variable "vpc_module_version" {
-#  description = "Version of terraform-aws-modules/vpc/aws"
-#  type        = string
-#  default     = "5.19.0"
-#}
-
 # --- Environment Settings ---
 variable "region" {
   description = "AWS region"
@@ -44,24 +19,29 @@ variable "azs" {
   type        = list(string)
 }
 
+# You can provide either:
+# - a list of subnet CIDRs (one per AZ), OR
+# - a single subnet CIDR which will be split across AZs.
 variable "public_subnets" {
-  description = "List of public subnet CIDRs"
+  description = "List of public subnet CIDRs. If length==1 and azs > 1, will be split across AZs."
   type        = list(string)
 }
 
 variable "private_subnets" {
-  description = "List of private subnet CIDRs"
+  description = "List of private subnet CIDRs. If length==1 and azs > 1, will be split across AZs."
   type        = list(string)
 }
 
 variable "public_subnet_names" {
-  description = "Names of public subnets"
+  description = "Names of public subnets. May be a single base name or list matching AZ count."
   type        = list(string)
+  default     = []
 }
 
 variable "private_subnet_names" {
-  description = "Names of private subnets"
+  description = "Names of private subnets. May be a single base name or list matching AZ count."
   type        = list(string)
+  default     = []
 }
 
 variable "instance_type" {

@@ -1,6 +1,8 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "s3" {} # Leave empty, details will come from backend-ap-south-1.hcl
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -58,6 +60,52 @@ data "aws_ami" "ubuntu_latest" {
 }
 
 # -------------------------
+# Subnet splitting logic
+# -------------------------
+locals {
+  az_count = length(var.azs)
+
+  newbits = (
+    local.az_count <= 1 ? 0 :
+    local.az_count <= 2 ? 1 :
+    local.az_count <= 4 ? 2 :
+    local.az_count <= 8 ? 3 :
+    local.az_count <= 16 ? 4 : 5
+  )
+
+  # Automatically build public subnets if only one CIDR provided
+  public_subnets_final = (
+    length(var.public_subnets) == local.az_count ? var.public_subnets :
+    length(var.public_subnets) == 1 ? [
+      for i in range(local.az_count) : cidrsubnet(var.public_subnets[0], local.newbits, i)
+    ] : var.public_subnets
+  )
+
+  # Automatically build private subnets if only one CIDR provided
+  private_subnets_final = (
+    length(var.private_subnets) == local.az_count ? var.private_subnets :
+    length(var.private_subnets) == 1 ? [
+      for i in range(local.az_count) : cidrsubnet(var.private_subnets[0], local.newbits, i)
+    ] : var.private_subnets
+  )
+
+  # Auto-generate subnet names
+  public_subnet_names_final = (
+    length(var.public_subnet_names) == local.az_count ? var.public_subnet_names :
+    length(var.public_subnet_names) == 1 ?
+    [for i in range(local.az_count) : "${var.public_subnet_names[0]}-${i + 1}"] :
+    var.public_subnet_names
+  )
+
+  private_subnet_names_final = (
+    length(var.private_subnet_names) == local.az_count ? var.private_subnet_names :
+    length(var.private_subnet_names) == 1 ?
+    [for i in range(local.az_count) : "${var.private_subnet_names[0]}-${i + 1}"] :
+    var.private_subnet_names
+  )
+}
+
+# -------------------------
 # VPC Module
 # -------------------------
 module "vpc" {
@@ -68,17 +116,16 @@ module "vpc" {
   cidr = var.vpc_cidr
 
   azs                  = var.azs
-  private_subnets      = var.private_subnets
-  private_subnet_names = var.private_subnet_names
-  public_subnets       = var.public_subnets
-  public_subnet_names  = var.public_subnet_names
+  private_subnets      = local.private_subnets_final
+  private_subnet_names = local.private_subnet_names_final
+  public_subnets       = local.public_subnets_final
+  public_subnet_names  = local.public_subnet_names_final
 
   enable_nat_gateway     = true
   one_nat_gateway_per_az = true
   enable_dns_hostnames   = true
   enable_dns_support     = true
 
-  # --- Kubernetes annotations removed ---
   public_subnet_tags = {
     subnet = "public"
   }
