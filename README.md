@@ -1,5 +1,5 @@
 aws s3api create-bucket \
-  --bucket tfstatebackup-10102025-south \
+  --bucket tfstatebackup-16102025-south \
   --region ap-south-1 \
   --create-bucket-configuration LocationConstraint=ap-south-1
 
@@ -9,7 +9,7 @@ aws dynamodb create-table \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
   --region ap-south-1
-
+***before delete all the keys in AWS console***
 chmod +x scripts/generate_ed25519_key.sh
 ./scripts/generate_ed25519_key.sh dev-classic-ap-south-1 ap-south-1
 
@@ -20,9 +20,9 @@ terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-south-1.tfvars"
 terraform apply -var-file="terraform-ap-south-1.tfvars"
+cp dev-classic-ap-south-1.pem ~/.ssh/
 terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ###rm -rf .terraform/ terraform.tfstate terraform.tfstate.backup
-
 
 aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=dev_classic-instance-*" \
@@ -31,11 +31,11 @@ aws ec2 describe-instances \
   --region ap-south-1
 
 ssh -i ./dev_classic-ap-south-1.pem ubuntu@<PUBLIC_IP>
-terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ****************************************************************************************************************
 ****************************************************************************************************************
+
 aws s3api create-bucket \
-  --bucket tfstatebackup-10102025-southeast \
+  --bucket tfstatebackup-16102025-southeast \
   --region ap-southeast-1 \
   --create-bucket-configuration LocationConstraint=ap-southeast-1
 
@@ -45,7 +45,7 @@ aws dynamodb create-table \
   --key-schema AttributeName=LockID,KeyType=HASH \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
   --region ap-southeast-1
-
+***before delete all the keys in AWS console***
 chmod +x scripts/generate_ed25519_key.sh
 ./scripts/generate_ed25519_key.sh dev-classic-ap-southeast-1 ap-southeast-1
 
@@ -56,6 +56,7 @@ terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-southeast-1.tfvars"
 terraform apply -var-file="terraform-ap-southeast-1.tfvars"
+cp dev-classic-ap-south-1.pem ~/.ssh/
 terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
 
 aws ec2 describe-instances \
@@ -65,9 +66,39 @@ aws ec2 describe-instances \
   --region ap-southeast-1
 
 ssh -i ./dev_classic-ap-southeast-1.pem ubuntu@<PUBLIC_IP>
-terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
 
 permanently delete
+
+/home/thani/github_new/terraform-jenkins-eks-automation/infra/dev-classic-ap-south-1.pub
+scp -i /home/thani/.ssh/ap-south-1-dev-classic.pem ~/.ssh/ap-south-1-dev-classic.pem ~/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1 ~/.ssh/dev-classic-ap-south-1.pub ubuntu@13.233.238.247:/home/ubuntu/.ssh
+
+hosts.ini
+[webservers]
+vm1 ansible_host=13.201.117.43 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/dev-classic-ap-south-1.pem
+
+setup.yml
+---
+- name: Setup Web Server
+  hosts: webservers
+  become: true
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Ensure Nginx is running
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+ansible-playbook -i hosts.ini setup.yml
 ********************************************
 
 03-09-25 

@@ -31,12 +31,12 @@ resource "tls_private_key" "dev_classic_key" {
 }
 
 resource "aws_key_pair" "terraform_key" {
-  key_name   = "${var.region}-dev-classic-key"
+  key_name   = "${var.region}-dev-classic"
   public_key = tls_private_key.dev_classic_key.public_key_openssh
 }
 
 resource "local_file" "private_key" {
-  content         = tls_private_key.dev_classic_key.private_key_pem
+  content         = tls_private_key.dev_classic_key.private_key_openssh
   filename        = "${path.module}/dev_classic-${var.region}.pem"
   file_permission = "0400"
 }

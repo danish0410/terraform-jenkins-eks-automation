@@ -3,7 +3,7 @@ vpc_name = "eks-vpc-ap-south-1"
 vpc_cidr = "10.0.0.0/16"
 
 # Provide multiple AZs
-azs = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
+azs = ["ap-south-1a"]
 
 # Provide a single public subnet base; it will be split into 3 subnets
 # Starting with /24, splitting into 3 subnets will actually use newbits=2 (up to 4 subnets),
@@ -16,5 +16,5 @@ private_subnet_names = ["private-subnet"]
 
 instance_type = "t3.micro"
 
-cidr_blocks_ingress_bastion = ["49.204.133.10/32"]
+cidr_blocks_ingress_bastion = ["49.204.112.196/32"]
 cidr_blocks_egress          = ["0.0.0.0/0"]
