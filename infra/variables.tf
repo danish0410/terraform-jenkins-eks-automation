@@ -19,27 +19,25 @@ variable "azs" {
   type        = list(string)
 }
 
-# You can provide either:
-# - a list of subnet CIDRs (one per AZ), OR
-# - a single subnet CIDR which will be split across AZs.
+# Subnets
 variable "public_subnets" {
-  description = "List of public subnet CIDRs. If length==1 and azs > 1, will be split across AZs."
+  description = "List of public subnet CIDRs. If single entry, will be split across AZs."
   type        = list(string)
 }
 
 variable "private_subnets" {
-  description = "List of private subnet CIDRs. If length==1 and azs > 1, will be split across AZs."
+  description = "List of private subnet CIDRs. If single entry, will be split across AZs."
   type        = list(string)
 }
 
 variable "public_subnet_names" {
-  description = "Names of public subnets. May be a single base name or list matching AZ count."
+  description = "Names of public subnets"
   type        = list(string)
   default     = []
 }
 
 variable "private_subnet_names" {
-  description = "Names of private subnets. May be a single base name or list matching AZ count."
+  description = "Names of private subnets"
   type        = list(string)
   default     = []
 }

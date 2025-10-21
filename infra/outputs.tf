@@ -34,3 +34,11 @@ output "ssh_private_key_path" {
   value       = local_file.private_key.filename
   description = "Path to generated private key. Protect this file!"
 }
+
+# -------------------------
+# Output Bastion Public IP
+# -------------------------
+output "bastion_public_ip" {
+  description = "Public IP of the bastion host"
+  value       = aws_instance.bastion.public_ip
+}

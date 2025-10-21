@@ -1,7 +1,7 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  backend "s3" {} # Leave empty, details will come from backend-ap-south-1.hcl
+  backend "s3" {} # details in backend-ap-south-1.hcl
 
   required_providers {
     aws = {
@@ -24,20 +24,20 @@ provider "aws" {
 }
 
 # -------------------------
-# TLS key generation (ed25519)
+# TLS Key Generation (ed25519)
 # -------------------------
 resource "tls_private_key" "dev_classic_key" {
   algorithm = "ED25519"
 }
 
 resource "aws_key_pair" "terraform_key" {
-  key_name   = "${var.region}-dev-classic"
+  key_name   = "dev-classic-${var.region}"
   public_key = tls_private_key.dev_classic_key.public_key_openssh
 }
 
 resource "local_file" "private_key" {
   content         = tls_private_key.dev_classic_key.private_key_openssh
-  filename        = "${path.module}/dev_classic-${var.region}.pem"
+  filename        = pathexpand("~/.ssh/dev-classic-${var.region}.pem")
   file_permission = "0400"
 }
 
@@ -60,7 +60,7 @@ data "aws_ami" "ubuntu_latest" {
 }
 
 # -------------------------
-# Subnet splitting logic
+# Subnet Splitting Logic
 # -------------------------
 locals {
   az_count = length(var.azs)
@@ -73,7 +73,6 @@ locals {
     local.az_count <= 16 ? 4 : 5
   )
 
-  # Automatically build public subnets if only one CIDR provided
   public_subnets_final = (
     length(var.public_subnets) == local.az_count ? var.public_subnets :
     length(var.public_subnets) == 1 ? [
@@ -81,7 +80,6 @@ locals {
     ] : var.public_subnets
   )
 
-  # Automatically build private subnets if only one CIDR provided
   private_subnets_final = (
     length(var.private_subnets) == local.az_count ? var.private_subnets :
     length(var.private_subnets) == 1 ? [
@@ -89,7 +87,6 @@ locals {
     ] : var.private_subnets
   )
 
-  # Auto-generate subnet names
   public_subnet_names_final = (
     length(var.public_subnet_names) == local.az_count ? var.public_subnet_names :
     length(var.public_subnet_names) == 1 ?
@@ -126,13 +123,8 @@ module "vpc" {
   enable_dns_hostnames   = true
   enable_dns_support     = true
 
-  public_subnet_tags = {
-    subnet = "public"
-  }
-
-  private_subnet_tags = {
-    subnet = "private"
-  }
+  public_subnet_tags  = { subnet = "public" }
+  private_subnet_tags = { subnet = "private" }
 
   tags = {
     Terraform   = "true"
@@ -146,7 +138,7 @@ module "vpc" {
 resource "aws_security_group" "dev_classic_sg" {
   vpc_id      = module.vpc.vpc_id
   name        = "dev_classic-sg-${var.region}"
-  description = "Allow SSH access to dev_classic (public)"
+  description = "Allow SSH access to Bastion host"
 
   ingress {
     from_port   = 22
@@ -164,9 +156,7 @@ resource "aws_security_group" "dev_classic_sg" {
     description = "Allow all outbound traffic"
   }
 
-  tags = {
-    Name = "dev_classic-sg-${var.region}"
-  }
+  tags = { Name = "dev_classic-sg-${var.region}" }
 }
 
 resource "aws_security_group" "private_ec2" {
@@ -178,7 +168,7 @@ resource "aws_security_group" "private_ec2" {
     to_port         = 22
     protocol        = "tcp"
     security_groups = [aws_security_group.dev_classic_sg.id]
-    description     = "Allow SSH from dev_classic"
+    description     = "Allow SSH from Bastion"
   }
 
   egress {
@@ -189,9 +179,25 @@ resource "aws_security_group" "private_ec2" {
     description = "Allow all outbound traffic"
   }
 
+  tags = { Name = "private-ec2-sg-${var.region}" }
+}
+
+# -------------------------
+# Bastion EC2 Instance
+# -------------------------
+resource "aws_instance" "bastion" {
+  ami                         = data.aws_ami.ubuntu_latest.id
+  instance_type               = "t3.micro"
+  subnet_id                   = module.vpc.public_subnets[0]
+  key_name                    = aws_key_pair.terraform_key.key_name
+  vpc_security_group_ids      = [aws_security_group.dev_classic_sg.id]
+  associate_public_ip_address = true
+
   tags = {
-    Name = "private-ec2-sg-${var.region}"
+    Name = "bastion-${var.region}"
   }
+
+  depends_on = [aws_key_pair.terraform_key]
 }
 
 # -------------------------
@@ -212,9 +218,7 @@ resource "aws_launch_template" "dev_classic_lt" {
 
   tag_specifications {
     resource_type = "instance"
-    tags = {
-      Name = "dev_classic-instance-${var.region}"
-    }
+    tags          = { Name = "dev_classic-instance-${var.region}" }
   }
 }
 
@@ -233,9 +237,7 @@ resource "aws_launch_template" "private_lt" {
 
   tag_specifications {
     resource_type = "instance"
-    tags = {
-      Name = "private-ec2-instance-${var.region}"
-    }
+    tags          = { Name = "private-ec2-instance-${var.region}" }
   }
 }
 
@@ -243,12 +245,11 @@ resource "aws_launch_template" "private_lt" {
 # Auto Scaling Groups
 # -------------------------
 resource "aws_autoscaling_group" "dev_classic_asg" {
-  count            = length(module.vpc.public_subnets)
-  name             = "dev-classic-asg-${var.region}-${count.index}"
-  desired_capacity = 1
-  max_size         = 1
-  min_size         = 1
-
+  count               = length(module.vpc.public_subnets)
+  name                = "dev-classic-asg-${var.region}-${count.index}"
+  desired_capacity    = 1
+  max_size            = 1
+  min_size            = 1
   vpc_zone_identifier = [module.vpc.public_subnets[count.index]]
   health_check_type   = "EC2"
   force_delete        = true
@@ -271,12 +272,11 @@ resource "aws_autoscaling_group" "dev_classic_asg" {
 }
 
 resource "aws_autoscaling_group" "private_asg" {
-  count            = length(module.vpc.private_subnets)
-  name             = "private-asg-${var.region}-${count.index}"
-  desired_capacity = 1
-  max_size         = 1
-  min_size         = 1
-
+  count               = length(module.vpc.private_subnets)
+  name                = "private-asg-${var.region}-${count.index}"
+  desired_capacity    = 1
+  max_size            = 1
+  min_size            = 1
   vpc_zone_identifier = [module.vpc.private_subnets[count.index]]
   health_check_type   = "EC2"
   force_delete        = true
