@@ -13,6 +13,12 @@ aws dynamodb create-table \
 chmod +x scripts/generate_ed25519_key.sh
 ./scripts/generate_ed25519_key.sh dev-classic-ap-south-1 ap-south-1
 
+nano update-bastion-ip.sh
+Press Ctrl + O → hit Enter to save
+Press Ctrl + X to exit
+chmod +x update-bastion-ip.sh
+./update-bastion-ip.sh
+
 mv backend-ap-southeast-1.hcl backend-ap-southeast-1.hcl.disabled
 mv backend-ap-south-1.hcl.disabled backend-ap-south-1.hcl
 terraform init -reconfigure -backend-config="backend-ap-south-1.hcl"
@@ -20,7 +26,7 @@ terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-south-1.tfvars"
 terraform apply -var-file="terraform-ap-south-1.tfvars"
-cp dev-classic-ap-south-1.pem ~/.ssh/
+scp -i /home/thani/.ssh/ap-south-1-dev-classic.pem ~/.ssh/ap-south-1-dev-classic.pem ~/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1 ~/.ssh/dev-classic-ap-south-1.pub ubuntu@13.233.238.247:/home/ubuntu/.ssh
 terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ###rm -rf .terraform/ terraform.tfstate terraform.tfstate.backup
 
@@ -31,6 +37,7 @@ aws ec2 describe-instances \
   --region ap-south-1
 
 ssh -i ./dev_classic-ap-south-1.pem ubuntu@<PUBLIC_IP>
+terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ****************************************************************************************************************
 ****************************************************************************************************************
 
@@ -66,6 +73,7 @@ aws ec2 describe-instances \
   --region ap-southeast-1
 
 ssh -i ./dev_classic-ap-southeast-1.pem ubuntu@<PUBLIC_IP>
+terraform destroy -var-file="terraform-ap-southeast-1.tfvars"
 
 permanently delete
 
@@ -73,9 +81,84 @@ permanently delete
 scp -i /home/thani/.ssh/ap-south-1-dev-classic.pem ~/.ssh/ap-south-1-dev-classic.pem ~/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1 ~/.ssh/dev-classic-ap-south-1.pub ubuntu@13.233.238.247:/home/ubuntu/.ssh
 
 hosts.ini
-[webservers]
-vm1 ansible_host=13.201.117.43 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/dev-classic-ap-south-1.pem
+[myservers]
+newvm ansible_host=<new-server-public-ip> ansible_user=ubuntu ansible_port=22 ansible_ssh_private_key_file=~/.ssh/my-key.pem
 
+##########################################create-user.yml playbook##########################################################
+---
+- name: Create linux user with SSH access
+  hosts: myservers
+  become: true
+  vars:
+    user_name: thanigai
+    user_shell: /bin/bash
+    user_groups: sudo               # use "wheel" on RHEL/CentOS
+    user_ssh_pubkey: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    allow_passwordless_sudo: true
+
+  tasks:
+    - name: Ensure groups exist
+      ansible.builtin.group:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ user_groups.split(',') if user_groups is string else [user_groups] }}"
+
+    - name: Create user "{{ user_name }}"
+      ansible.builtin.user:
+        name: "{{ user_name }}"
+        shell: "{{ user_shell }}"
+        groups: "{{ user_groups }}"
+        append: yes
+        home: "/home/{{ user_name }}"
+        create_home: yes
+        state: present
+
+    - name: Create .ssh directory
+      ansible.builtin.file:
+        path: "/home/{{ user_name }}/.ssh"
+        owner: "{{ user_name }}"
+        group: "{{ user_name }}"
+        mode: "0700"
+        state: directory
+
+    - name: Add authorized_keys
+      ansible.builtin.copy:
+        dest: "/home/{{ user_name }}/.ssh/authorized_keys"
+        content: "{{ user_ssh_pubkey }}\n"
+        owner: "{{ user_name }}"
+        group: "{{ user_name }}"
+        mode: "0600"
+
+    - name: Ensure passwordless sudo
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ user_name }}"
+        content: "{{ user_name }} ALL=(ALL) NOPASSWD:ALL\n"
+        owner: root
+        group: root
+        mode: "0440"
+      when: allow_passwordless_sudo
+
+
+*********password 
+python3 - <<'PY'
+import crypt
+pw = "YourStrongPasswordHere"
+print(crypt.crypt(pw, crypt.mksalt(crypt.METHOD_SHA512)))
+PY
+
+sudo apt update
+sudo apt install -y awscli
+aws --version
+aws configure
+aws ec2 authorize-security-group-ingress \
+    --group-id sg-06dacc171d6e96938 \
+    --protocol tcp \
+    --port 22 \
+    --cidr 49.204.128.24/32
+ssh -i /home/ubuntu/.ssh/dev-classic-ap-south-1.pem ubuntu@3.109.49.71
+ansible-playbook -i hosts.ini create-user.yml
+
+##########################################nginx playbook##########################################################
 setup.yml
 ---
 - name: Setup Web Server
