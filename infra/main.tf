@@ -1,16 +1,12 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  backend "s3" {} # details in backend-ap-south-1.hcl
+  backend "s3" {} # backend details stored separately (backend-ap-south-1.hcl)
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = ">= 4.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -23,27 +19,37 @@ provider "aws" {
   region = var.region
 }
 
-# -------------------------
-# TLS Key Generation (ed25519)
-# -------------------------
-resource "tls_private_key" "dev_classic_key" {
-  algorithm = "ED25519"
+# ==========================================================
+# Key Pair (Generated via scripts/generate_ed25519_key.sh)
+# ==========================================================
+# Run before Terraform:
+#   ./scripts/generate_ed25519_key.sh dev-classic-ap-south-1 ap-south-1
+#
+# This creates all files in ~/.ssh/:
+#   ~/.ssh/dev-classic-ap-south-1        ← main private key
+#   ~/.ssh/dev-classic-ap-south-1.pem    ← Terraform private key
+#   ~/.ssh/dev-classic-ap-south-1.pub    ← AWS public key
+# ==========================================================
+
+locals {
+  key_name    = "dev-classic-${var.region}"
+  private_key = pathexpand("~/.ssh/${local.key_name}.pem")
+  public_key  = pathexpand("~/.ssh/${local.key_name}.pub")
 }
 
-resource "aws_key_pair" "terraform_key" {
-  key_name   = "dev-classic-${var.region}"
-  public_key = tls_private_key.dev_classic_key.public_key_openssh
+# ✅ Validate local private key exists
+data "local_file" "existing_private_key" {
+  filename = local.private_key
 }
 
-resource "local_file" "private_key" {
-  content         = tls_private_key.dev_classic_key.private_key_openssh
-  filename        = pathexpand("~/.ssh/dev-classic-${var.region}.pem")
-  file_permission = "0400"
+# ✅ Reference AWS keypair (must already exist in AWS)
+data "aws_key_pair" "existing_keypair" {
+  key_name = local.key_name
 }
 
-# -------------------------
-# Dynamic AMI lookup (Ubuntu LTS)
-# -------------------------
+# ==========================================================
+# Dynamic AMI Lookup (Ubuntu 22.04 LTS)
+# ==========================================================
 data "aws_ami" "ubuntu_latest" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
@@ -59,9 +65,9 @@ data "aws_ami" "ubuntu_latest" {
   }
 }
 
-# -------------------------
+# ==========================================================
 # Subnet Splitting Logic
-# -------------------------
+# ==========================================================
 locals {
   az_count = length(var.azs)
 
@@ -102,9 +108,9 @@ locals {
   )
 }
 
-# -------------------------
+# ==========================================================
 # VPC Module
-# -------------------------
+# ==========================================================
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "5.1.2"
@@ -132,9 +138,9 @@ module "vpc" {
   }
 }
 
-# -------------------------
+# ==========================================================
 # Security Groups
-# -------------------------
+# ==========================================================
 resource "aws_security_group" "dev_classic_sg" {
   vpc_id      = module.vpc.vpc_id
   name        = "dev_classic-sg-${var.region}"
@@ -182,32 +188,30 @@ resource "aws_security_group" "private_ec2" {
   tags = { Name = "private-ec2-sg-${var.region}" }
 }
 
-# -------------------------
+# ==========================================================
 # Bastion EC2 Instance
-# -------------------------
+# ==========================================================
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu_latest.id
   instance_type               = "t3.micro"
   subnet_id                   = module.vpc.public_subnets[0]
-  key_name                    = aws_key_pair.terraform_key.key_name
+  key_name                    = local.key_name
   vpc_security_group_ids      = [aws_security_group.dev_classic_sg.id]
   associate_public_ip_address = true
 
   tags = {
     Name = "bastion-${var.region}"
   }
-
-  depends_on = [aws_key_pair.terraform_key]
 }
 
-# -------------------------
+# ==========================================================
 # Launch Templates
-# -------------------------
+# ==========================================================
 resource "aws_launch_template" "dev_classic_lt" {
   name_prefix   = "dev-classic-lt-${var.region}-"
   image_id      = data.aws_ami.ubuntu_latest.id
   instance_type = var.instance_type
-  key_name      = aws_key_pair.terraform_key.key_name
+  key_name      = local.key_name
 
   network_interfaces {
     associate_public_ip_address = true
@@ -226,7 +230,7 @@ resource "aws_launch_template" "private_lt" {
   name_prefix   = "private-ec2-lt-${var.region}-"
   image_id      = data.aws_ami.ubuntu_latest.id
   instance_type = var.instance_type
-  key_name      = aws_key_pair.terraform_key.key_name
+  key_name      = local.key_name
 
   network_interfaces {
     associate_public_ip_address = false
@@ -241,9 +245,9 @@ resource "aws_launch_template" "private_lt" {
   }
 }
 
-# -------------------------
+# ==========================================================
 # Auto Scaling Groups
-# -------------------------
+# ==========================================================
 resource "aws_autoscaling_group" "dev_classic_asg" {
   count               = length(module.vpc.public_subnets)
   name                = "dev-classic-asg-${var.region}-${count.index}"
@@ -264,11 +268,6 @@ resource "aws_autoscaling_group" "dev_classic_asg" {
     value               = "dev-classic-asg-${var.region}"
     propagate_at_launch = true
   }
-
-  depends_on = [
-    aws_launch_template.dev_classic_lt,
-    aws_key_pair.terraform_key
-  ]
 }
 
 resource "aws_autoscaling_group" "private_asg" {
@@ -291,9 +290,4 @@ resource "aws_autoscaling_group" "private_asg" {
     value               = "private-asg-${var.region}"
     propagate_at_launch = true
   }
-
-  depends_on = [
-    aws_launch_template.private_lt,
-    aws_key_pair.terraform_key
-  ]
 }

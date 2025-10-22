@@ -26,7 +26,7 @@ terraform fmt -recursive
 terraform validate
 terraform plan -var-file="terraform-ap-south-1.tfvars"
 terraform apply -var-file="terraform-ap-south-1.tfvars"
-scp -i /home/thani/.ssh/ap-south-1-dev-classic.pem ~/.ssh/ap-south-1-dev-classic.pem ~/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1 ~/.ssh/dev-classic-ap-south-1.pub ubuntu@13.233.238.247:/home/ubuntu/.ssh
+scp -i /home/thani/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1.pem ~/.ssh/dev-classic-ap-south-1 ~/.ssh/dev-classic-ap-south-1.pub ubuntu@13.235.50.20:/home/ubuntu/.ssh
 terraform destroy -var-file="terraform-ap-south-1.tfvars"
 ###rm -rf .terraform/ terraform.tfstate terraform.tfstate.backup
 

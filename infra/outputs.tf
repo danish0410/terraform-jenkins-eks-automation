@@ -30,10 +30,10 @@ output "private_asg_names" {
   value = [for k, v in aws_autoscaling_group.private_asg : v.name]
 }
 
-output "ssh_private_key_path" {
-  value       = local_file.private_key.filename
-  description = "Path to generated private key. Protect this file!"
-}
+#output "ssh_private_key_path" {
+#  value       = local_file.private_key.filename
+#  description = "Path to generated private key. Protect this file!"
+#}
 
 # -------------------------
 # Output Bastion Public IP
