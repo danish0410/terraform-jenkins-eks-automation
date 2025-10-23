@@ -191,7 +191,7 @@ resource "aws_security_group" "private_ec2" {
 # ==========================================================
 # Bastion EC2 Instance
 # ==========================================================
-resource "aws_instance" "bastion" {
+/*resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu_latest.id
   instance_type               = "t3.micro"
   subnet_id                   = module.vpc.public_subnets[0]
@@ -202,7 +202,7 @@ resource "aws_instance" "bastion" {
   tags = {
     Name = "bastion-${var.region}"
   }
-}
+}*/
 
 # ==========================================================
 # Launch Templates

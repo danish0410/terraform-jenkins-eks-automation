@@ -38,7 +38,7 @@ output "private_asg_names" {
 # -------------------------
 # Output Bastion Public IP
 # -------------------------
-output "bastion_public_ip" {
+/*output "bastion_public_ip" {
   description = "Public IP of the bastion host"
   value       = aws_instance.bastion.public_ip
-}
+}*/
